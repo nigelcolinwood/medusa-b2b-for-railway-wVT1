@@ -38,7 +38,8 @@ module.exports = defineConfig({
               endPoint: process.env.MINIO_ENDPOINT,
               accessKey: process.env.MINIO_ACCESS_KEY,
               secretKey: process.env.MINIO_SECRET_KEY,
-              bucket: process.env.MINIO_BUCKET // Optional, default: medusa-media
+              bucket: process.env.MINIO_BUCKET, // Optional, default: medusa-media
+              publicEndpoint: process.env.MINIO_PUBLIC_ENDPOINT // Public URL for generated image URLs
             }
           }] : [{
             resolve: "@medusajs/medusa/file-local",

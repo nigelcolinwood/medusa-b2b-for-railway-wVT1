@@ -37,6 +37,26 @@ const nextConfig = {
         protocol: "https",
         hostname: "github.com",
       },
+      // MinIO/S3-compatible storage - add your public MinIO domain here
+      // Railway typically provides domains like: *.up.railway.app
+      {
+        protocol: "https",
+        hostname: "**.up.railway.app",
+      },
+      {
+        protocol: "https",
+        hostname: "**.railway.app",
+      },
+      // Generic S3-compatible patterns
+      {
+        protocol: "https",
+        hostname: "**.s3.**.amazonaws.com",
+      },
+      // Allow any hostname for development (you may want to restrict this in production)
+      ...(process.env.NEXT_PUBLIC_MINIO_DOMAIN ? [{
+        protocol: "https",
+        hostname: process.env.NEXT_PUBLIC_MINIO_DOMAIN,
+      }] : []),
     ],
   },
 }

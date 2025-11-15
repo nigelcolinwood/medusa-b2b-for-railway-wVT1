@@ -21,6 +21,7 @@ interface MinioServiceConfig {
   accessKey: string
   secretKey: string
   bucket?: string
+  publicEndpoint?: string
 }
 
 export interface MinioFileProviderOptions {
@@ -28,9 +29,17 @@ export interface MinioFileProviderOptions {
   accessKey: string
   secretKey: string
   bucket?: string
+  publicEndpoint?: string
 }
 
 const DEFAULT_BUCKET = 'medusa-media'
+
+interface ParsedEndpoint {
+  protocol: string
+  hostname: string
+  port: number
+  host: string
+}
 
 /**
  * Service to handle file storage using MinIO.
@@ -41,6 +50,7 @@ class MinioFileProviderService extends AbstractFileProviderService {
   protected readonly logger_: Logger
   protected client: Client
   protected readonly bucket: string
+  protected readonly publicEndpoint: string
 
   constructor({ logger }: InjectedDependencies, options: MinioFileProviderOptions) {
     super()
@@ -49,18 +59,28 @@ class MinioFileProviderService extends AbstractFileProviderService {
       endPoint: options.endPoint,
       accessKey: options.accessKey,
       secretKey: options.secretKey,
-      bucket: options.bucket
+      bucket: options.bucket,
+      publicEndpoint: options.publicEndpoint
     }
 
     // Use provided bucket or default
     this.bucket = this.config_.bucket || DEFAULT_BUCKET
-    this.logger_.info(`MinIO service initialized with bucket: ${this.bucket}`)
 
-    // Initialize Minio client with hardcoded SSL settings
+    // Parse the endpoint to extract host and determine SSL/port
+    const endpointUrl = this.parseEndpoint(this.config_.endPoint)
+
+    // Store the public endpoint for URL generation (falls back to internal endpoint)
+    this.publicEndpoint = this.config_.publicEndpoint || `${endpointUrl.protocol}//${endpointUrl.host}`
+
+    this.logger_.info(`MinIO service initialized with bucket: ${this.bucket}`)
+    this.logger_.info(`MinIO internal endpoint: ${this.config_.endPoint}`)
+    this.logger_.info(`MinIO public endpoint: ${this.publicEndpoint}`)
+
+    // Initialize Minio client with parsed settings
     this.client = new Client({
-      endPoint: this.config_.endPoint,
-      port: 443,
-      useSSL: true,
+      endPoint: endpointUrl.hostname,
+      port: endpointUrl.port,
+      useSSL: endpointUrl.protocol === 'https:',
       accessKey: this.config_.accessKey,
       secretKey: this.config_.secretKey
     })
@@ -86,6 +106,41 @@ class MinioFileProviderService extends AbstractFileProviderService {
         )
       }
     })
+  }
+
+  private parseEndpoint(endpoint: string): ParsedEndpoint {
+    // Handle endpoints that may or may not include protocol
+    let urlString = endpoint
+    if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+      // Default to https if no protocol specified
+      urlString = `https://${endpoint}`
+    }
+
+    try {
+      const url = new URL(urlString)
+      const defaultPort = url.protocol === 'https:' ? 443 : 80
+      const port = url.port ? parseInt(url.port, 10) : defaultPort
+
+      return {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port,
+        host: url.host
+      }
+    } catch (error) {
+      // Fallback for simple hostname:port format
+      this.logger_.warn(`Failed to parse endpoint URL, using fallback: ${error.message}`)
+      const parts = endpoint.split(':')
+      const hostname = parts[0]
+      const port = parts.length > 1 ? parseInt(parts[1], 10) : 443
+
+      return {
+        protocol: 'https:',
+        hostname,
+        port,
+        host: port === 443 ? hostname : `${hostname}:${port}`
+      }
+    }
   }
 
   private async initializeBucket(): Promise<void> {
@@ -178,10 +233,11 @@ class MinioFileProviderService extends AbstractFileProviderService {
         }
       )
 
-      // Generate URL using the endpoint and bucket
-      const url = `https://${this.config_.endPoint}/${this.bucket}/${fileKey}`
+      // Generate URL using the public endpoint and bucket
+      const url = `${this.publicEndpoint}/${this.bucket}/${fileKey}`
 
       this.logger_.info(`Successfully uploaded file ${fileKey} to MinIO bucket ${this.bucket}`)
+      this.logger_.info(`Generated public URL: ${url}`)
 
       return {
         url,
