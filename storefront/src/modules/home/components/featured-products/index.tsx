@@ -13,6 +13,15 @@ export default async function FeaturedProducts({
   })
   const region = await getRegion(countryCode)
 
+  // Debug logging - check Railway logs
+  console.log("[FeaturedProducts] Collections count:", collections?.length || 0)
+  console.log("[FeaturedProducts] Region:", region?.id || "none")
+  if (collections?.length) {
+    collections.forEach((col, i) => {
+      console.log(`[FeaturedProducts] Collection ${i}: ${col.title}, products: ${col.products?.length || 0}`)
+    })
+  }
+
   if (!collections || !region) {
     return null
   }
